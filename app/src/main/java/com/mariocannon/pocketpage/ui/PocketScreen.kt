@@ -49,8 +49,10 @@ class PocketActions(
     val onPreview: () -> Unit,
     val onScan: () -> Unit,
     val onMakeQr: () -> Unit,
+    val onMakeLinkQr: () -> Unit,
     val onSaveQr: () -> Unit,
     val onWriteTag: () -> Unit,
+    val onWriteLinkTag: () -> Unit,
     val onCancelWrite: () -> Unit,
 )
 
@@ -58,9 +60,11 @@ class PocketActions(
 @Composable
 fun PocketScreen(hasNfc: Boolean, actions: PocketActions) {
     val html = PocketState.html
-    val payloadSize = remember(html) { if (html.isEmpty()) 0 else PageCodec.compress(html).size }
+    val payload = remember(html) { PageCodec.compress(html) }
+    val payloadSize = if (html.isEmpty()) 0 else payload.size
     val rawSize = remember(html) { html.toByteArray(Charsets.UTF_8).size }
     val tagNeed = PageCodec.nfcBytesNeeded(payloadSize)
+    val linkTagNeed = remember(payload) { PageCodec.nfcLinkBytesNeeded(payload) }
 
     Scaffold(
         topBar = {
@@ -105,18 +109,25 @@ fun PocketScreen(hasNfc: Boolean, actions: PocketActions) {
             }
 
             Section("2 · QR code") {
+                Muted("App QR holds the most but needs PocketPage to scan. Link QR opens with any phone camera.")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = actions.onMakeQr, modifier = Modifier.weight(1f)) { Text("Make QR") }
-                    OutlinedButton(
-                        onClick = actions.onSaveQr,
-                        enabled = PocketState.qr != null,
+                    Button(onClick = actions.onMakeQr, modifier = Modifier.weight(1f)) { Text("App QR") }
+                    Button(
+                        onClick = actions.onMakeLinkQr,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
                         modifier = Modifier.weight(1f),
-                    ) { Text("Save to Photos") }
+                    ) { Text("Link QR") }
                 }
+                OutlinedButton(
+                    onClick = actions.onSaveQr,
+                    enabled = PocketState.qr != null,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Save to Photos") }
                 PocketState.qrError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 PocketState.qr?.let { qr ->
                     Muted(
-                        "Version ${qr.version} (${qr.modules}×${qr.modules}) · ${qr.difficulty}. " +
+                        (if (PocketState.qrIsLink) "Link QR · " else "App QR · ") +
+                            "Version ${qr.version} (${qr.modules}×${qr.modules}) · ${qr.difficulty}. " +
                             "Print at least ${qr.minPrintCm} cm wide."
                     )
                     Image(
@@ -132,18 +143,8 @@ fun PocketScreen(hasNfc: Boolean, actions: PocketActions) {
                 if (!hasNfc) {
                     Text("This phone has no NFC.", color = MaterialTheme.colorScheme.error)
                 } else {
-                    Muted("Page needs $tagNeed B on the tag:")
-                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        TAGS.forEach { (name, cap) ->
-                            val ok = payloadSize > 0 && tagNeed <= cap
-                            Text(
-                                "${if (ok) "✓" else "✗"} $name",
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (ok) Color(0xFF2C7A4B) else MaterialTheme.colorScheme.error,
-                                fontSize = 14.sp,
-                            )
-                        }
-                    }
+                    TagFit("App tag", tagNeed, payloadSize > 0)
+                    TagFit("Link tag", linkTagNeed, payloadSize > 0)
                     if (PocketState.writing) {
                         Button(
                             onClick = actions.onCancelWrite,
@@ -151,15 +152,42 @@ fun PocketScreen(hasNfc: Boolean, actions: PocketActions) {
                             modifier = Modifier.fillMaxWidth(),
                         ) { Text("Hold a tag to the phone…  (tap to cancel)") }
                     } else {
-                        Button(onClick = actions.onWriteTag, modifier = Modifier.fillMaxWidth()) {
-                            Text("Write page to NFC tag")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = actions.onWriteTag, modifier = Modifier.weight(1f)) {
+                                Text("Write app tag")
+                            }
+                            Button(
+                                onClick = actions.onWriteLinkTag,
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                modifier = Modifier.weight(1f),
+                            ) { Text("Write link tag") }
                         }
                     }
                     if (PocketState.nfcStatus.isNotEmpty()) Text(PocketState.nfcStatus, fontSize = 14.sp)
-                    Muted("With this screen open, tap any PocketPage tag to read it. With the app closed, a tap opens the page directly.")
+                    Muted(
+                        "App tag: needs PocketPage, opens offline straight away. " +
+                            "Link tag: any phone (iPhone too) opens it in the browser; first time needs internet, then works offline. " +
+                            "If PocketPage is installed, both open in the app."
+                    )
                 }
             }
             Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun TagFit(label: String, need: Int, hasPage: Boolean) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("$label ${if (hasPage) "$need B" else ""}", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TAGS.forEach { (name, cap) ->
+            val ok = hasPage && need <= cap
+            Text(
+                "${if (ok) "✓" else "✗"} ${name.removePrefix("NTAG")}",
+                fontWeight = FontWeight.SemiBold,
+                color = if (ok) Color(0xFF2C7A4B) else MaterialTheme.colorScheme.error,
+                fontSize = 13.sp,
+            )
         }
     }
 }

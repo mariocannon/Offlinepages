@@ -62,6 +62,38 @@ class PageCodecTest {
     }
 
     @Test
+    fun pageRoundTripsThroughLink() {
+        val html = "<!doctype html><h1>Kia ora</h1>" + "<p>Ōrewa beach</p>".repeat(30)
+        val link = PageCodec.toLink(PageCodec.compress(html))
+        assertTrue(link.startsWith("https://mariocannon.github.io/Offlinepages/#p="))
+        assertEquals(html, PageCodec.decompress(PageCodec.fromLink(link)!!))
+    }
+
+    @Test
+    fun readsLinkMadeByTheWebApp() {
+        val fromWeb = "https://mariocannon.github.io/Offlinepages/#p=s8kwtPPOTFTIL0pUONpTlFqeaKOfYWhnU2DnVpSfq5CokJOZl22jX2AHAA"
+        assertEquals(
+            "<h1>Kia ora Ōrewa</h1><p>From a link</p>",
+            PageCodec.decompress(PageCodec.fromLink(fromWeb)!!),
+        )
+    }
+
+    @Test
+    fun ignoresOtherLinks() {
+        assertNull(PageCodec.fromLink("https://example.com/page"))
+        assertNull(PageCodec.fromLink("https://mariocannon.github.io/Offlinepages/"))
+    }
+
+    @Test
+    fun nfcLinkSizing() {
+        val payload = ByteArray(300) { it.toByte() }
+        // 1 prefix byte + URL minus "https://" -> header 3 or 6, + type 1, + TLV, + terminator
+        val uri = 1 + PageCodec.toLink(payload).removePrefix("https://").length
+        val record = (if (uri < 256) 3 else 6) + 1 + uri
+        assertEquals(record + (if (record < 255) 2 else 4) + 1, PageCodec.nfcLinkBytesNeeded(payload))
+    }
+
+    @Test
     fun nfcSizing() {
         // 100 B payload: 3 header + 16 type + 100 = 119 record, + 2 TLV + 1 terminator
         assertEquals(122, PageCodec.nfcBytesNeeded(100))

@@ -60,9 +60,11 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                                     .setOrientationLocked(false)
                             )
                         },
-                        onMakeQr = ::makeQr,
+                        onMakeQr = { makeQr(link = false) },
+                        onMakeLinkQr = { makeQr(link = true) },
                         onSaveQr = ::saveQr,
-                        onWriteTag = ::startWrite,
+                        onWriteTag = { startWrite(link = false) },
+                        onWriteLinkTag = { startWrite(link = true) },
                         onCancelWrite = ::cancelWrite,
                     ),
                 )
@@ -102,10 +104,12 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
 
     // ---------- QR ----------
-    private fun makeQr() {
-        val text = PageCodec.toQrText(PageCodec.compress(PocketState.html))
+    private fun makeQr(link: Boolean) {
+        val payload = PageCodec.compress(PocketState.html)
+        val text = if (link) PageCodec.toLink(payload) else PageCodec.toQrText(payload)
         try {
             PocketState.qr = QrRenderer.render(text)
+            PocketState.qrIsLink = link
             PocketState.qrError = null
         } catch (e: WriterException) {
             PocketState.qr = null
@@ -140,12 +144,13 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     }
 
     // ---------- NFC ----------
-    private fun startWrite() {
+    private fun startWrite(link: Boolean) {
         if (nfc?.isEnabled != true) {
             PocketState.nfcStatus = "Turn NFC on in Settings first."
             return
         }
-        PocketState.pendingWrite = PageCodec.compress(PocketState.html)
+        val payload = PageCodec.compress(PocketState.html)
+        PocketState.pendingWrite = if (link) TagIo.linkMessage(payload) else TagIo.message(payload)
         PocketState.writing = true
         PocketState.nfcStatus = ""
     }

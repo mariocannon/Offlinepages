@@ -5,7 +5,8 @@ Native Android app (Kotlin + Jetpack Compose) that stores a small landing page i
 **Read `PLAN.md` first.** It has the data format, architecture and milestones. Update its Status checklist as milestones land.
 
 ## Hard constraints
-- **Offline.** No network calls, no backend, no analytics. Pages render in a WebView from local data only.
+- **Offline.** The app makes no network calls: no backend, no analytics. Pages render in a WebView from local data only.
+- The web viewer (`web/`) is static files on GitHub Pages. The page data stays in the URL fragment and never goes to a server.
 - **No Google Play Services.** QR scanning uses ZXing (`zxing-android-embedded`), not ML Kit.
 - **$0.**
 - **Don't break the data format** (see PLAN.md). It's shared with the web app; `PageCodecTest.readsQrMadeByTheWebApp` guards it.

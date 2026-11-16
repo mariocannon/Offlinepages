@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b3d4f">
+<title>PocketPage</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{--bg:#f4f1ea;--ink:#13232b;--muted:#5d6b70;--card:#fff;--line:#d9d3c7;--accent:#0b3d4f;--accent2:#e2683c;--ok:#2c7a4b;--warn:#b8740e;--bad:#b3261e}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  header{background:var(--accent);color:#fff;padding:14px 16px calc(10px) ;padding-top:max(14px,env(safe-area-inset-top))}
+  header h1{margin:0;font-size:20px;letter-spacing:.2px}
+  header p{margin:2px 0 0;opacity:.75;font-size:13px}
+  nav{display:flex;background:var(--accent);padding:0 8px}
+  nav button{flex:1;background:none;border:0;color:#fff;opacity:.65;padding:10px 4px 12px;font:600 15px system-ui;border-bottom:3px solid transparent}
+  nav button.on{opacity:1;border-color:var(--accent2)}
+  main{padding:14px;max-width:720px;margin:0 auto}
+  section{display:none}
+  section.on{display:block}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px}
+  .card h2{margin:0 0 8px;font-size:16px}
+  textarea{width:100%;min-height:220px;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);border-radius:10px;padding:10px;background:#fbfaf7;color:var(--ink)}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  button.b{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:11px 14px;font:600 15px system-ui}
+  button.b.alt{background:#fff;color:var(--accent);border:1.5px solid var(--accent)}
+  button.b.hot{background:var(--accent2)}
+  button.b:disabled{opacity:.45}
+  select{padding:9px;border-radius:9px;border:1px solid var(--line);font:15px system-ui;background:#fff}
+  .meter{margin-top:10px}
+  .bar{height:10px;border-radius:6px;background:#ebe6dc;overflow:hidden;margin:4px 0 2px}
+  .bar i{display:block;height:100%;background:var(--ok);width:0}
+  .stat{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+  .pill{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;background:#e8f3ec;color:var(--ok)}
+  .pill.warn{background:#fbf1e1;color:var(--warn)}
+  .pill.bad{background:#fbe9e8;color:var(--bad)}
+  #qrOut{display:flex;justify-content:center;background:#fff;padding:10px;border-radius:10px}
+  #qrOut svg{width:100%;max-width:420px;height:auto}
+  .muted{color:var(--muted);font-size:13px}
+  .vid{position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:3/4;max-height:60vh;margin:0 auto}
+  .vid video{width:100%;height:100%;object-fit:cover}
+  .vid .frame{position:absolute;inset:12%;border:3px solid rgba(255,255,255,.85);border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.25)}
+  #log{font:12px ui-monospace,monospace;color:var(--muted);white-space:pre-wrap;margin-top:8px}
+  #viewer{position:fixed;inset:0;background:#fff;z-index:50;display:none;flex-direction:column}
+  #viewer.on{display:flex}
+  #viewer.bare .vbar{display:none}
+  #viewer .vbar{display:flex;align-items:center;gap:8px;background:var(--accent);color:#fff;padding:8px 10px;padding-top:max(8px,env(safe-area-inset-top))}
+  #viewer .vbar span{flex:1;font-size:13px;opacity:.8}
+  #viewer .vbar button{background:rgba(255,255,255,.15);color:#fff;border:0;border-radius:8px;padding:8px 12px;font:600 14px system-ui}
+  #viewer iframe{flex:1;border:0;width:100%}
+  .tagtbl{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+  .tagtbl td{padding:4px 2px;border-top:1px solid var(--line)}
+  .tagtbl td:last-child{text-align:right}
+</style>
+</head>
+<body>
+<header>
+  <h1>PocketPage</h1>
+  <p>Offline landing pages stored in QR codes &amp; NFC tags</p>
+</header>
+<nav>
+  <button data-tab="create" class="on">Create</button>
+  <button data-tab="scan">Scan QR</button>
+  <button data-tab="nfc">NFC</button>
+</nav>
+
+<main>
+  <!-- CREATE -->
+  <section id="create" class="on">
+    <div class="card">
+      <h2>1 · Page HTML</h2>
+      <textarea id="html" spellcheck="false"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="b alt" id="btnSample">Full sample</button>
+        <button class="b alt" id="btnTiny">Tiny (NFC) sample</button>
+        <button class="b alt" id="btnMinify">Minify</button>
+        <button class="b alt" id="btnPreview">Preview</button>
+      </div>
+      <div class="meter">
+        <div class="stat"><span>Raw <b id="sRaw">0</b> B → compressed <b id="sZip">0</b> B</span><span id="sRatio"></span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>2 · QR code</h2>
+      <p class="muted"><b>App QR</b> holds the most but needs PocketPage to scan. <b>Link QR</b> opens with any phone camera.</p>
+      <div class="row">
+        <label class="muted">Error correction
+          <select id="ecl">
+            <option value="L">L – most capacity</option>
+            <option value="M" selected>M – sturdier print</option>
+          </select>
+        </label>
+        <button class="b" id="btnQR">App QR</button>
+        <button class="b hot" id="btnLinkQR">Link QR</button>
+        <button class="b alt" id="btnSaveQR" disabled>Save SVG</button>
+      </div>
+      <div class="meter">
+        <div class="stat"><span>QR payload <b id="qBytes">–</b></span><span id="qPill"></span></div>
+        <div class="bar"><i id="qBar"></i></div>
+        <div class="muted" id="qNote">Version 40-L max ≈ 2,860 B. Version ≤ 25 scans easily off paper.</div>
+      </div>
+      <div id="qrOut" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card">
+      <h2>3 · NFC tag fit</h2>
+      <table class="tagtbl" id="tagTbl"></table>
+      <p class="muted">“App data” = raw record, needs this app open. “Link” = tap with any phone; opens this app’s cached viewer, offline after first install.</p>
+      <div class="row">
+        <button class="b" id="btnWriteApp">Write tag · app data</button>
+        <button class="b hot" id="btnWriteLink">Write tag · link</button>
+      </div>
+      <div class="muted" id="nfcWriteMsg" style="margin-top:8px"></div>
+    </div>
+  </section>
+
+  <!-- SCAN QR -->
+  <section id="scan">
+    <div class="card">
+      <h2>Scan a PocketPage QR</h2>
+      <div class="vid"><video id="video" playsinline muted></video><div class="frame"></div></div>
+      <div class="row" style="margin-top:10px">
+        <button class="b" id="btnCam">Start camera</button>
+        <button class="b alt" id="btnCamStop">Stop</button>
+      </div>
+      <div id="log"></div>
+    </div>
+  </section>
+
+  <!-- NFC -->
+  <section id="nfc">
+    <div class="card">
+      <h2>Read a PocketPage NFC tag</h2>
+      <p class="muted" id="nfcSupport"></p>
+      <button class="b" id="btnNfcScan">Start NFC reading</button>
+      <div class="muted" id="nfcMsg" style="margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <h2>How tags work here</h2>
+      <p class="muted"><b>App data tag:</b> holds the compressed page as a custom record (max capacity). Open this app → NFC → tap the tag.</p>
+      <p class="muted"><b>Link tag:</b> holds a URL with the page packed after the <code>#</code>. Any phone opens it from the lock screen; the page is decoded on the phone and never sent to a server.</p>
+      <p class="muted">Writing &amp; in-app reading use Web NFC → Chrome on Android. iPhones can still open <b>link tags</b>.</p>
+    </div>
+  </section>
+</main>
+
+<div id="viewer">
+  <div class="vbar"><span id="vInfo">Offline page</span><button id="vClose">✕ Close</button></div>
+  <iframe id="vFrame" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms"></iframe>
+</div>
+
+<script src="vendor/qrcode.js"></script>
+<script src="vendor/jsQR.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

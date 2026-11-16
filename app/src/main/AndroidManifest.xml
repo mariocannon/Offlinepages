@@ -34,6 +34,26 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/x-pp" />
             </intent-filter>
+            <!-- Link tags: tapped with the app closed -> open here, offline. -->
+            <intent-filter>
+                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data
+                    android:host="mariocannon.github.io"
+                    android:pathPrefix="/Offlinepages"
+                    android:scheme="https" />
+            </intent-filter>
+            <!-- Link QRs scanned with the camera. Android 12+ only routes these here if
+                 "Open supported links" is turned on for PocketPage in App info. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="mariocannon.github.io"
+                    android:pathPrefix="/Offlinepages"
+                    android:scheme="https" />
+            </intent-filter>
         </activity>
 
         <!-- Let the QR scanner run in portrait. -->

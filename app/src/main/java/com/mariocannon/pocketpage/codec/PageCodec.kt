@@ -1,6 +1,7 @@
 package com.mariocannon.pocketpage.codec
 
 import java.io.ByteArrayOutputStream
+import java.util.Base64
 import java.util.zip.DataFormatException
 import java.util.zip.Deflater
 import java.util.zip.Inflater
@@ -55,6 +56,31 @@ object PageCodec {
     /** Returns the payload, or null if the text isn't a PocketPage QR. Throws if it's damaged. */
     fun fromQrText(text: String): ByteArray? =
         if (text.startsWith(QR_PREFIX)) Base45.decode(text.substring(QR_PREFIX.length)) else null
+
+    // ---- Link (opens on any phone, no app needed) ----
+    /** Hosted viewer (GitHub Pages). Everything after # stays on the phone; servers never see it. */
+    const val LINK_BASE = "https://mariocannon.github.io/Offlinepages/"
+    private const val LINK_KEY = "#p="
+
+    fun toLink(payload: ByteArray): String =
+        LINK_BASE + LINK_KEY + Base64.getUrlEncoder().withoutPadding().encodeToString(payload)
+
+    /** Returns the payload, or null if the URL isn't a PocketPage link. Throws if it's damaged. */
+    fun fromLink(url: String): ByteArray? {
+        val i = url.indexOf(LINK_KEY)
+        if (i < 0) return null
+        val data = url.substring(i + LINK_KEY.length).takeWhile { it.isLetterOrDigit() || it == '-' || it == '_' }
+        if (data.isEmpty()) return null
+        return Base64.getUrlDecoder().decode(data)
+    }
+
+    /** Bytes a tag needs for a link: URI record (https:// is a 1-byte prefix) + TLV + terminator. */
+    fun nfcLinkBytesNeeded(payload: ByteArray): Int {
+        val uriBytes = 1 + toLink(payload).removePrefix("https://").length
+        val record = (if (uriBytes < 256) 3 else 6) + 1 + uriBytes
+        val tlv = if (record < 255) 2 else 4
+        return record + tlv + 1
+    }
 
     // ---- NFC sizing ----
     /** Bytes a tag needs for this payload: MIME record + NDEF TLV wrapper + terminator. */

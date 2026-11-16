@@ -13,13 +13,20 @@ import com.mariocannon.pocketpage.codec.PageCodec
 /** Reading and writing PocketPage NFC tags. */
 object TagIo {
 
+    /** App-only tag: raw page, most capacity, needs PocketPage installed. */
     fun message(payload: ByteArray) = NdefMessage(NdefRecord.createMime(PageCodec.MIME, payload))
 
+    /** Link tag: any phone opens it in the browser; opens in PocketPage if installed. */
+    fun linkMessage(payload: ByteArray) = NdefMessage(NdefRecord.createUri(PageCodec.toLink(payload)))
+
+    /** Finds a PocketPage in either form (app record or link). */
     fun findPayload(messages: List<NdefMessage>): ByteArray? {
         for (m in messages) for (r in m.records) {
             if (r.tnf == NdefRecord.TNF_MIME_MEDIA && String(r.type, Charsets.US_ASCII) == PageCodec.MIME) {
                 return r.payload
             }
+            val uri = r.toUri() ?: continue
+            PageCodec.fromLink(uri.toString())?.let { return it }
         }
         return null
     }
@@ -43,8 +50,7 @@ object TagIo {
     }
 
     /** Writes the page. Returns bytes used. Throws with a readable message on failure. */
-    fun write(tag: Tag, payload: ByteArray): Int {
-        val msg = message(payload)
+    fun write(tag: Tag, msg: NdefMessage): Int {
         val size = msg.byteArrayLength
         Ndef.get(tag)?.let { ndef ->
             ndef.connect()

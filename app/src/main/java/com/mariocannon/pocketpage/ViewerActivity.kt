@@ -17,7 +17,7 @@ import com.mariocannon.pocketpage.nfc.TagIo
 
 /**
  * Shows a page decoded from a QR code or an NFC tag. Fully offline.
- * Also opens by itself when a PocketPage tag is tapped with the app closed (see the manifest).
+ * Also opens by itself when a PocketPage tag or link is tapped with the app closed (see the manifest).
  */
 class ViewerActivity : ComponentActivity() {
 
@@ -63,12 +63,15 @@ class ViewerActivity : ComponentActivity() {
     }
 
     private fun show(intent: Intent) {
-        val payload = intent.getByteArrayExtra(EXTRA_PAYLOAD) ?: TagIo.read(intent)
-        if (payload == null) {
-            fail("No PocketPage found")
-            return
-        }
         val html = try {
+            // From the app, a link (QR / browser), or a tag tapped with the app closed.
+            val payload = intent.getByteArrayExtra(EXTRA_PAYLOAD)
+                ?: intent.data?.let { PageCodec.fromLink(it.toString()) }
+                ?: TagIo.read(intent)
+            if (payload == null) {
+                fail("No PocketPage found")
+                return
+            }
             PageCodec.decompress(payload)
         } catch (e: Exception) {
             fail("Page data is damaged")
