@@ -8,14 +8,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,24 +23,14 @@ import androidx.compose.ui.unit.sp
 class ReadActions(
     val onScan: () -> Unit,
     val onNfcSettings: () -> Unit,
+    val onLibrary: () -> Unit,
     val onWrite: () -> Unit,
 )
 
 /** Start page: scan a QR code or tap a tag to open a page. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReadScreen(hasNfc: Boolean, actions: ReadActions) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("PocketPage") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
-            )
-        },
-    ) { inner ->
+    Scaffold(topBar = { PocketTopBar("PocketPage") }) { inner ->
         Column(
             Modifier
                 .fillMaxSize()
@@ -83,6 +70,10 @@ fun ReadScreen(hasNfc: Boolean, actions: ReadActions) {
                 }
                 if (PocketState.nfcStatus.isNotEmpty()) {
                     Text(PocketState.nfcStatus, fontSize = 14.sp, color = MaterialTheme.colorScheme.error)
+                }
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(onClick = actions.onLibrary, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                    Text("My library", fontSize = 16.sp)
                 }
             }
             TextButton(onClick = actions.onWrite) { Text("Write a page →") }

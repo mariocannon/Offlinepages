@@ -16,12 +16,18 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.remember
 import com.google.zxing.WriterException
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.mariocannon.pocketpage.codec.PageCodec
+import com.mariocannon.pocketpage.library.Library
 import com.mariocannon.pocketpage.nfc.TagIo
 import com.mariocannon.pocketpage.qr.QrRenderer
+import com.mariocannon.pocketpage.ui.BookActions
+import com.mariocannon.pocketpage.ui.BookScreen
+import com.mariocannon.pocketpage.ui.LibraryActions
+import com.mariocannon.pocketpage.ui.LibraryScreen
 import com.mariocannon.pocketpage.ui.Page
 import com.mariocannon.pocketpage.ui.PocketActions
 import com.mariocannon.pocketpage.ui.PocketState
@@ -32,13 +38,20 @@ import com.mariocannon.pocketpage.ui.WriteScreen
 
 class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
+    companion object {
+        /** Open straight to this book (key) — used by the viewer's book bar. */
+        const val EXTRA_OPEN_BOOK = "openBook"
+    }
+
     private var nfc: NfcAdapter? = null
+    private val library by lazy { Library.at(filesDir) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         nfc = NfcAdapter.getDefaultAdapter(this)
         if (PocketState.html.isEmpty()) PocketState.setPage(asset("tiny.html"))
+        if (savedInstanceState == null) handleOpenBook(intent)
 
         setContent {
             PocketTheme {
@@ -48,43 +61,82 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                 val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
                     uri?.let { loadFile(it) }
                 }
-                if (PocketState.page == Page.Read) ReadScreen(
-                    hasNfc = nfc != null,
-                    actions = ReadActions(
-                        onScan = {
-                            scanner.launch(
-                                ScanOptions()
-                                    .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                                    .setPrompt("Point at a PocketPage QR code")
-                                    .setBeepEnabled(false)
-                                    .setOrientationLocked(false)
-                            )
-                        },
-                        onNfcSettings = { startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) },
-                        onWrite = { showPage(Page.Write) },
-                    ),
-                ) else WriteScreen(
-                    hasNfc = nfc != null,
-                    actions = PocketActions(
-                        onFullSample = { PocketState.setPage(asset("full.html")) },
-                        onTinySample = { PocketState.setPage(asset("tiny.html")) },
-                        onOpenFile = { filePicker.launch("text/*") },
-                        onPreview = { openViewer(PageCodec.compress(PocketState.html)) },
-                        onMakeQr = { makeQr(link = false) },
-                        onMakeLinkQr = { makeQr(link = true) },
-                        onSaveQr = ::saveQr,
-                        onWriteTag = { startWrite(link = false) },
-                        onWriteLinkTag = { startWrite(link = true) },
-                        onCancelWrite = ::cancelWrite,
-                        onBack = { showPage(Page.Read) },
-                    ),
-                )
+                val version = PocketState.libraryVersion
+                when (PocketState.page) {
+                    Page.Read -> ReadScreen(
+                        hasNfc = nfc != null,
+                        actions = ReadActions(
+                            onScan = {
+                                scanner.launch(
+                                    ScanOptions()
+                                        .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                                        .setPrompt("Point at a PocketPage QR code")
+                                        .setBeepEnabled(false)
+                                        .setOrientationLocked(false)
+                                )
+                            },
+                            onNfcSettings = { startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) },
+                            onLibrary = { showPage(Page.Library) },
+                            onWrite = { showPage(Page.Write) },
+                        ),
+                    )
+                    Page.Write -> WriteScreen(
+                        hasNfc = nfc != null,
+                        actions = PocketActions(
+                            onFullSample = { PocketState.setPage(asset("full.html")) },
+                            onTinySample = { PocketState.setPage(asset("tiny.html")) },
+                            onOpenFile = { filePicker.launch("text/*") },
+                            onPreview = { openViewer(PageCodec.compress(PocketState.html), preview = true) },
+                            onMakeQr = { makeQr(link = false) },
+                            onMakeLinkQr = { makeQr(link = true) },
+                            onSaveQr = ::saveQr,
+                            onWriteTag = { startWrite(link = false) },
+                            onWriteLinkTag = { startWrite(link = true) },
+                            onCancelWrite = ::cancelWrite,
+                            onBack = { showPage(Page.Read) },
+                        ),
+                    )
+                    Page.Library -> {
+                        val entries = remember(version) { library.entries() }
+                        LibraryScreen(
+                            books = remember(entries) { library.books(entries) },
+                            pages = remember(entries) { library.singles(entries) },
+                            actions = LibraryActions(
+                                onBack = { showPage(Page.Read) },
+                                onOpenBook = ::showBook,
+                                onOpenPage = ::openSaved,
+                                onDeletePage = {
+                                    library.delete(it)
+                                    PocketState.libraryVersion++
+                                },
+                            ),
+                        )
+                    }
+                    Page.Book -> BookScreen(
+                        book = remember(version, PocketState.openBook) { PocketState.openBook?.let(library::book) },
+                        actions = BookActions(
+                            onBack = { showPage(Page.Library) },
+                            onOpenPage = ::openSaved,
+                            onDelete = {
+                                library.deleteBook(it)
+                                PocketState.libraryVersion++
+                                showPage(Page.Library)
+                            },
+                        ),
+                    )
+                }
             }
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleOpenBook(intent)
+    }
+
     override fun onResume() {
         super.onResume()
+        PocketState.libraryVersion++ // the viewer may have saved pages
         PocketState.nfcOn = nfc?.isEnabled == true
         // Reader mode: while this screen is open, every tag comes to onTagDiscovered.
         nfc?.enableReaderMode(
@@ -107,6 +159,16 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         PocketState.page = page
     }
 
+    private fun showBook(key: String) {
+        PocketState.openBook = key
+        showPage(Page.Book)
+    }
+
+    private fun handleOpenBook(intent: Intent) {
+        intent.getStringExtra(EXTRA_OPEN_BOOK)?.let(::showBook)
+        intent.removeExtra(EXTRA_OPEN_BOOK)
+    }
+
     private fun asset(name: String): String =
         assets.open(name).use { it.readBytes().toString(Charsets.UTF_8) }.trim()
 
@@ -115,8 +177,16 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         if (text != null) PocketState.setPage(text) else toast("Couldn't read that file")
     }
 
-    private fun openViewer(payload: ByteArray) {
-        startActivity(Intent(this, ViewerActivity::class.java).putExtra(ViewerActivity.EXTRA_PAYLOAD, payload))
+    private fun openViewer(payload: ByteArray, preview: Boolean = false) {
+        startActivity(
+            Intent(this, ViewerActivity::class.java)
+                .putExtra(ViewerActivity.EXTRA_PAYLOAD, payload)
+                .putExtra(ViewerActivity.EXTRA_PREVIEW, preview)
+        )
+    }
+
+    private fun openSaved(id: String) {
+        startActivity(Intent(this, ViewerActivity::class.java).putExtra(ViewerActivity.EXTRA_SAVED_ID, id))
     }
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_LONG).show()

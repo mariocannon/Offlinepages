@@ -19,20 +19,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
@@ -41,8 +37,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mariocannon.pocketpage.codec.BookMeta
 import com.mariocannon.pocketpage.codec.PageCodec
 
 private val TAGS = listOf("NTAG213" to 144, "NTAG215" to 504, "NTAG216" to 888)
@@ -61,7 +59,6 @@ class PocketActions(
     val onBack: () -> Unit,
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WriteScreen(hasNfc: Boolean, actions: PocketActions) {
     BackHandler(onBack = actions.onBack)
@@ -72,23 +69,7 @@ fun WriteScreen(hasNfc: Boolean, actions: PocketActions) {
     val tagNeed = PageCodec.nfcBytesNeeded(payloadSize)
     val linkTagNeed = remember(payload) { PageCodec.nfcLinkBytesNeeded(payload) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Write a page") },
-                navigationIcon = {
-                    IconButton(onClick = actions.onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to reading")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
-            )
-        },
-    ) { inner ->
+    Scaffold(topBar = { PocketTopBar("Write a page", onBack = actions.onBack) }) { inner ->
         Column(
             Modifier
                 .fillMaxSize()
@@ -117,7 +98,9 @@ fun WriteScreen(hasNfc: Boolean, actions: PocketActions) {
                 OutlinedButton(onClick = actions.onPreview, modifier = Modifier.fillMaxWidth()) { Text("Preview") }
             }
 
-            Section("2 · QR code") {
+            BookSection(html)
+
+            Section("3 · QR code") {
                 Muted("App QR holds the most but needs PocketPage to scan. Link QR opens with any phone camera.")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = actions.onMakeQr, modifier = Modifier.weight(1f)) { Text("App QR") }
@@ -148,7 +131,7 @@ fun WriteScreen(hasNfc: Boolean, actions: PocketActions) {
                 }
             }
 
-            Section("3 · NFC tag") {
+            Section("4 · NFC tag") {
                 if (!hasNfc) {
                     Text("This phone has no NFC.", color = MaterialTheme.colorScheme.error)
                 } else {
@@ -181,6 +164,61 @@ fun WriteScreen(hasNfc: Boolean, actions: PocketActions) {
                 }
             }
             Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+/** Optional: mark this page as one page of a book, so readers collect it into that book. */
+@Composable
+private fun BookSection(html: String) {
+    val current = remember(html) { BookMeta.read(html) }
+    var title by remember(current) { mutableStateOf(current?.title ?: "") }
+    var page by remember(current) { mutableStateOf(current?.page?.toString() ?: "") }
+    var total by remember(current) { mutableStateOf(current?.total?.toString() ?: "") }
+    val meta = BookMeta.of(title, page, total)
+    val number = KeyboardOptions(keyboardType = KeyboardType.Number)
+
+    Section("2 · Book (optional)") {
+        Muted("Part of a book? Readers collect every page into one book as they scan them.")
+        OutlinedTextField(
+            value = title,
+            onValueChange = { title = it },
+            label = { Text("Book title") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = page,
+                onValueChange = { page = it.filter(Char::isDigit).take(3) },
+                label = { Text("Page") },
+                singleLine = true,
+                keyboardOptions = number,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedTextField(
+                value = total,
+                onValueChange = { total = it.filter(Char::isDigit).take(3) },
+                label = { Text("of") },
+                singleLine = true,
+                keyboardOptions = number,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        if (meta == null && (title.isNotBlank() || page.isNotEmpty() || total.isNotEmpty())) {
+            Muted("Fill in all three. The page number must be between 1 and the total.")
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = { PocketState.setPage(BookMeta.write(html, meta)) },
+                enabled = meta != null && meta != current,
+                modifier = Modifier.weight(1f),
+            ) { Text(if (current == null) "Add to page" else "Update page") }
+            if (current != null) {
+                OutlinedButton(onClick = { PocketState.setPage(BookMeta.write(html, null)) }, modifier = Modifier.weight(1f)) {
+                    Text("Remove")
+                }
+            }
         }
     }
 }
