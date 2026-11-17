@@ -9,6 +9,7 @@ import android.nfc.Tag
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -21,10 +22,13 @@ import com.journeyapps.barcodescanner.ScanOptions
 import com.mariocannon.pocketpage.codec.PageCodec
 import com.mariocannon.pocketpage.nfc.TagIo
 import com.mariocannon.pocketpage.qr.QrRenderer
+import com.mariocannon.pocketpage.ui.Page
 import com.mariocannon.pocketpage.ui.PocketActions
-import com.mariocannon.pocketpage.ui.PocketScreen
 import com.mariocannon.pocketpage.ui.PocketState
 import com.mariocannon.pocketpage.ui.PocketTheme
+import com.mariocannon.pocketpage.ui.ReadActions
+import com.mariocannon.pocketpage.ui.ReadScreen
+import com.mariocannon.pocketpage.ui.WriteScreen
 
 class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
@@ -44,13 +48,9 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                 val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
                     uri?.let { loadFile(it) }
                 }
-                PocketScreen(
+                if (PocketState.page == Page.Read) ReadScreen(
                     hasNfc = nfc != null,
-                    actions = PocketActions(
-                        onFullSample = { PocketState.setPage(asset("full.html")) },
-                        onTinySample = { PocketState.setPage(asset("tiny.html")) },
-                        onOpenFile = { filePicker.launch("text/*") },
-                        onPreview = { openViewer(PageCodec.compress(PocketState.html)) },
+                    actions = ReadActions(
                         onScan = {
                             scanner.launch(
                                 ScanOptions()
@@ -60,12 +60,23 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                                     .setOrientationLocked(false)
                             )
                         },
+                        onNfcSettings = { startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) },
+                        onWrite = { showPage(Page.Write) },
+                    ),
+                ) else WriteScreen(
+                    hasNfc = nfc != null,
+                    actions = PocketActions(
+                        onFullSample = { PocketState.setPage(asset("full.html")) },
+                        onTinySample = { PocketState.setPage(asset("tiny.html")) },
+                        onOpenFile = { filePicker.launch("text/*") },
+                        onPreview = { openViewer(PageCodec.compress(PocketState.html)) },
                         onMakeQr = { makeQr(link = false) },
                         onMakeLinkQr = { makeQr(link = true) },
                         onSaveQr = ::saveQr,
                         onWriteTag = { startWrite(link = false) },
                         onWriteLinkTag = { startWrite(link = true) },
                         onCancelWrite = ::cancelWrite,
+                        onBack = { showPage(Page.Read) },
                     ),
                 )
             }
@@ -74,6 +85,7 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
     override fun onResume() {
         super.onResume()
+        PocketState.nfcOn = nfc?.isEnabled == true
         // Reader mode: while this screen is open, every tag comes to onTagDiscovered.
         nfc?.enableReaderMode(
             this, this,
@@ -89,6 +101,12 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     }
 
     // ---------- page ----------
+    private fun showPage(page: Page) {
+        cancelWrite()
+        PocketState.nfcStatus = ""
+        PocketState.page = page
+    }
+
     private fun asset(name: String): String =
         assets.open(name).use { it.readBytes().toString(Charsets.UTF_8) }.trim()
 

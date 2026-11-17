@@ -13,7 +13,7 @@ Hold a landing page in a printed QR code or an NFC tag. Scan/tap → the page sh
 - `codec/PageCodec.kt` — compress/decompress, Base45, QR text, NFC size maths. Pure Kotlin, unit-tested.
 - `nfc/TagIo.kt` — read from reader-mode `Tag` or `NDEF_DISCOVERED` intent; write (formats blank tags).
 - `qr/QrRenderer.kt` — ZXing `Encoder` → crisp Bitmap + version info.
-- `MainActivity` — Compose editor screen; NFC reader mode while open; QR scan via ZXing `ScanContract`.
+- `MainActivity` — hosts two Compose pages: `ReadScreen` (default; QR scan via ZXing `ScanContract`, tap a tag) and `WriteScreen` (editor, QR make, tag write). NFC reader mode while open.
 - `ViewerActivity` — WebView renders the page from memory. Links open in the browser. No file/content access.
 - `ui/PocketState` — app-wide state object (survives rotation).
 - `web/` — static web version (creator + link viewer + service worker), deployed by `.github/workflows/pages.yml`.

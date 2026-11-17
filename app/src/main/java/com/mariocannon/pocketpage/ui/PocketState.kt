@@ -6,8 +6,12 @@ import androidx.compose.runtime.setValue
 import android.nfc.NdefMessage
 import com.mariocannon.pocketpage.qr.QrImage
 
+enum class Page { Read, Write }
+
 /** App-wide UI state. Lives outside the Activity so it survives rotation. */
 object PocketState {
+    var page by mutableStateOf(Page.Read)
+    var nfcOn by mutableStateOf(false)
     var html by mutableStateOf("")
     var qr by mutableStateOf<QrImage?>(null)
     var qrError by mutableStateOf<String?>(null)

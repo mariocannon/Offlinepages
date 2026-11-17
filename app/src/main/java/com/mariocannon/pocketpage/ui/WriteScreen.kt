@@ -1,5 +1,6 @@
 package com.mariocannon.pocketpage.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -18,7 +19,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -47,18 +52,19 @@ class PocketActions(
     val onTinySample: () -> Unit,
     val onOpenFile: () -> Unit,
     val onPreview: () -> Unit,
-    val onScan: () -> Unit,
     val onMakeQr: () -> Unit,
     val onMakeLinkQr: () -> Unit,
     val onSaveQr: () -> Unit,
     val onWriteTag: () -> Unit,
     val onWriteLinkTag: () -> Unit,
     val onCancelWrite: () -> Unit,
+    val onBack: () -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PocketScreen(hasNfc: Boolean, actions: PocketActions) {
+fun WriteScreen(hasNfc: Boolean, actions: PocketActions) {
+    BackHandler(onBack = actions.onBack)
     val html = PocketState.html
     val payload = remember(html) { PageCodec.compress(html) }
     val payloadSize = if (html.isEmpty()) 0 else payload.size
@@ -69,10 +75,16 @@ fun PocketScreen(hasNfc: Boolean, actions: PocketActions) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("PocketPage") },
+                title = { Text("Write a page") },
+                navigationIcon = {
+                    IconButton(onClick = actions.onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to reading")
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
                 ),
             )
         },
@@ -102,10 +114,7 @@ fun PocketScreen(hasNfc: Boolean, actions: PocketActions) {
                     SmallOutlined("Open file", Modifier.weight(1f), actions.onOpenFile)
                 }
                 Muted("Raw $rawSize B → compressed $payloadSize B")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = actions.onPreview, modifier = Modifier.weight(1f)) { Text("Preview") }
-                    Button(onClick = actions.onScan, modifier = Modifier.weight(1f)) { Text("Scan QR") }
-                }
+                OutlinedButton(onClick = actions.onPreview, modifier = Modifier.fillMaxWidth()) { Text("Preview") }
             }
 
             Section("2 · QR code") {
