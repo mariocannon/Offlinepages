@@ -13,8 +13,8 @@ const c = vm.runInContext(
   '({ PP2_DICT, deflate, inflate, applyTheme, themeOf, qrText, fromQrText, linkURL, fromLink, b45enc })', ctx);
 
 // The dictionary is frozen. Same numbers as PageCodecTest.dictionaryIsFrozen.
-assert.equal(c.PP2_DICT.length, 3807);
-assert.equal(crc32(c.PP2_DICT).toString(16), 'ad40c250');
+assert.equal(c.PP2_DICT.length, 14364);
+assert.equal(crc32(c.PP2_DICT).toString(16), '94c62460');
 
 // Round trip, and the dictionary really helps on a small page.
 const page = '<meta charset=utf-8><meta name=viewport content=width=device-width><h1>Kia ora Ōrewa</h1><p>Hibiscus Coast</p>';
@@ -36,7 +36,7 @@ assert.equal(
 
 // A PP2 payload made by java.util.zip.Deflater, which is what the Android app uses.
 assert.equal(
-  await c.inflate(c.fromQrText('PP2:-TOWI6ZIVO 6:8IKR29:I3J8WLNJ2Q0$Q8D9ZUETC2ED1D6100')),
+  await c.inflate(c.fromQrText('PP2:-TOWI6ZIVVW5AQGOBSIT8GHGV:5R+CM6RQ$5$00112')),
   '<body class=pp-dark><h1>Kia ora Ōrewa</h1><p>Made by the app</p>');
 
 assert.equal(c.fromQrText('https://example.com'), null);

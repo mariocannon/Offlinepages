@@ -1,5 +1,5 @@
 // Cache the whole app so it works with no signal after the first visit.
-const CACHE = 'pocketpage-v3';
+const CACHE = 'pocketpage-v4';
 const FILES = ['./', 'index.html', 'app.js', 'codec.js', 'vendor/pako.min.js', 'vendor/qrcode.js', 'vendor/jsQR.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener('activate', (e) => {

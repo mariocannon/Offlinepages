@@ -5,7 +5,7 @@ Hold a landing page in a printed QR code or an NFC tag. Scan/tap → the page sh
 
 ## Data format (shared with the web app — don't change without bumping the prefix)
 Current format is **PP2**. PP1 codes, links and tags still open.
-- **payload** = raw DEFLATE (no zlib header) of the page's UTF-8 HTML, compressed against the **PP2 dictionary** (`codec/Pp2Dictionary.kt`, same text in `web/codec.js`). The dictionary is 3,807 B of text small pages nearly always contain (HTML tags, CSS, common words), so the compressor points into it instead of storing those bytes. It is **frozen**: changing one byte breaks every PP2 code and tag. A better one means PP3.
+- **payload** = raw DEFLATE (no zlib header) of the page's UTF-8 HTML, compressed against the **PP2 dictionary** (`codec/Pp2Dictionary.kt`, same text in `web/codec.js`). The dictionary is 14,364 B of text small pages nearly always contain: HTML tags, CSS, common English words and phrases, NZ places and te reo Māori, opening hours and prices, and words for common topics (tech and radio, outdoors, cafés and hire, trades and safety, events, kids' stories), so the compressor points into it instead of storing those bytes. It is **frozen**: changing one byte breaks every PP2 code and tag. A better one means PP3.
 - **QR** = `PP2:` + Base45(payload) (RFC 9285). All characters are in the QR alphanumeric set, so the QR uses alphanumeric mode (~97% efficient vs raw bytes).
 - **Link** = `https://mariocannon.github.io/Offlinepages/#p2=` + base64url(payload), no padding. Opens on any phone with no app: the hosted viewer (`web/`, GitHub Pages) decodes the part after `#` on the phone. Browsers never send `#…` to the server. First visit needs internet; the service worker caches the viewer so later scans work offline.
 - **NFC** = one NDEF external-type record, type `pp:2` (4 B on the tag), data = payload. Android dispatches `NDEF_DISCOVERED` for this type to `ViewerActivity`, so tags open with the app closed.
@@ -30,7 +30,7 @@ Current format is **PP2**. PP1 codes, links and tags still open.
 
 ## Capacity
 - QR v40-L ≈ 2,860 B payload, but aim for ≤ v25 for easy phone scanning (~1 KB payload).
-- NTAG213 144 B, NTAG215 504 B, NTAG216 888 B. DEFLATE gives ~2–3× on small HTML; the PP2 dictionary takes a further 40–290 B off (about half on pages under 200 B). A PP2 tag costs payload + 10 B (PP1: + 22 B).
+- NTAG213 144 B, NTAG215 504 B, NTAG216 888 B. DEFLATE gives ~2–3× on small HTML; the PP2 dictionary takes a further 20–30% off (about half on pages under 200 B). A PP2 tag costs payload + 10 B (PP1: + 22 B).
 
 ## Milestones
 - **M1** Editor, compress, QR make/save, QR scan → viewer. NFC write + read (reader mode + app-closed tap).

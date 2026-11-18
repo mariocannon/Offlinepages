@@ -109,8 +109,8 @@ class PageCodecTest {
     /** Every PP2 code and tag depends on these exact bytes. Same numbers as tools/web-codec-test.mjs. */
     @Test
     fun dictionaryIsFrozen() {
-        assertEquals(3807, Pp2Dictionary.BYTES.size)
-        assertEquals(0xad40c250L, CRC32().apply { update(Pp2Dictionary.BYTES) }.value)
+        assertEquals(14364, Pp2Dictionary.BYTES.size)
+        assertEquals(0x94c62460L, CRC32().apply { update(Pp2Dictionary.BYTES) }.value)
     }
 
     @Test
@@ -140,7 +140,7 @@ class PageCodecTest {
 
     @Test
     fun readsPp2QrMadeByTheWebApp() {
-        val fromWeb = "PP2:-TOCLBZIVO 6:8IKR29:I3J8WLNJ2Q0\$Q8D9ZUEUBG4N6-\$O7D0KD400"
+        val fromWeb = "PP2:-TOCLBZIVVW5AQGOBSIT8GHGV:5R+CBTRK%54X9*\$HCEG961"
         assertEquals(
             "<body class=pp-book><h1>Kia ora Ōrewa</h1><p>Made by the web app</p>",
             PageCodec.decompress(PageCodec.fromQrText(fromWeb)!!),
@@ -149,7 +149,7 @@ class PageCodecTest {
 
     @Test
     fun readsPp2LinkMadeByTheWebApp() {
-        val fromWeb = "https://mariocannon.github.io/Offlinepages/#p2=wxpawPiENeKP9hSllidCornAzg3Uq0oEN6xBiQMA"
+        val fromWeb = "https://mariocannon.github.io/Offlinepages/#p2=wxpawPiELUyDLN-DRHOBnRuogwPqmuZlgxIHAA"
         assertEquals(
             "<body class=pp-book><h1>Kia ora Ōrewa</h1><p>From a link</p>",
             PageCodec.decompress(PageCodec.fromLink(fromWeb)!!),
