@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.mariocannon.pocketpage.codec.BookMeta
 import com.mariocannon.pocketpage.codec.PageCodec
+import com.mariocannon.pocketpage.codec.Themes
 import com.mariocannon.pocketpage.library.Library
 import com.mariocannon.pocketpage.nfc.TagIo
 import com.mariocannon.pocketpage.ui.PocketTheme
@@ -124,7 +125,8 @@ class ViewerActivity : ComponentActivity() {
             fail("Page data is damaged")
             return
         }
-        web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
+        // Built-in themes: <body class=pp-dark> gets its stylesheet from the app, not the tag.
+        web.loadDataWithBaseURL(null, Themes.apply(html), "text/html", "utf-8", null)
         bar = when {
             intent.getBooleanExtra(EXTRA_PREVIEW, false) -> Bar.None
             else -> barFor(payload, html, fromLibrary = savedId != null)

@@ -1,69 +1,15 @@
-/* PocketPage — offline landing pages in QR codes and NFC tags.
- *
- * Payload = raw-DEFLATE of the page's UTF-8 HTML.
- *   QR:        "PP1:" + base45(payload)   (QR alphanumeric mode, ~97% efficient)
- *   NFC app:   MIME record "application/x-pp", bytes = payload
- *   Link:      https://mariocannon.github.io/Offlinepages/#p=<base64url(payload)>
+/* PocketPage web app: creator, scanner and link viewer.
+ * The data format (compression, dictionary, themes, base45, links) lives in codec.js.
  */
 'use strict';
 
-const QR_PREFIX = 'PP1:';
-const NFC_MIME = 'application/x-pp';
 const $ = (id) => document.getElementById(id);
-
-/* ---------- compression ---------- */
-async function pipe(bytes, stream) {
-  const out = new Blob([bytes]).stream().pipeThrough(stream);
-  return new Uint8Array(await new Response(out).arrayBuffer());
-}
-const deflate = (str) => pipe(new TextEncoder().encode(str), new CompressionStream('deflate-raw'));
-const inflate = async (bytes) => new TextDecoder().decode(await pipe(bytes, new DecompressionStream('deflate-raw')));
-
-/* ---------- base45 (RFC 9285) ---------- */
-const B45 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
-function b45enc(u8) {
-  let s = '';
-  for (let i = 0; i < u8.length; i += 2) {
-    if (i + 1 < u8.length) {
-      let x = u8[i] * 256 + u8[i + 1];
-      s += B45[x % 45] + B45[Math.floor(x / 45) % 45] + B45[Math.floor(x / 2025)];
-    } else {
-      s += B45[u8[i] % 45] + B45[Math.floor(u8[i] / 45)];
-    }
-  }
-  return s;
-}
-function b45dec(str) {
-  const out = [];
-  for (let i = 0; i < str.length; i += 3) {
-    const c = B45.indexOf(str[i]), d = B45.indexOf(str[i + 1]);
-    if (c < 0 || d < 0) throw new Error('bad base45');
-    if (i + 2 < str.length) {
-      const e = B45.indexOf(str[i + 2]);
-      if (e < 0) throw new Error('bad base45');
-      const x = c + d * 45 + e * 2025;
-      out.push(x >> 8, x & 255);
-    } else out.push(c + d * 45);
-  }
-  return new Uint8Array(out);
-}
-
-/* ---------- base64url ---------- */
-function b64uenc(u8) {
-  let bin = ''; u8.forEach((b) => (bin += String.fromCharCode(b)));
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-function b64udec(s) {
-  s = s.replace(/-/g, '+').replace(/_/g, '/');
-  const bin = atob(s + '==='.slice((s.length + 3) % 4));
-  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
-}
 
 /* ---------- viewer ---------- */
 function openPage(html, info, bare) {
   $('viewer').classList.toggle('bare', !!bare);
   $('vInfo').textContent = info || 'Offline page';
-  $('vFrame').srcdoc = html;
+  $('vFrame').srcdoc = applyTheme(html);
   $('viewer').classList.add('on');
 }
 $('vClose').onclick = () => {
@@ -110,10 +56,7 @@ const TAGS = [
   ['NTAG213', 144], ['NTAG215', 504], ['NTAG216', 888], ['NTAG I2C plus 2K', 1912], ['DESFire / ST25 8K', 7600],
 ];
 // NDEF overhead: TLV (4) + terminator (1) + long record header (6) + type
-const appNeed = (n) => n + 4 + 1 + 6 + NFC_MIME.length;
-// Links always point at the hosted viewer, so tags/QRs made anywhere open the same place.
-const LINK_BASE = 'https://mariocannon.github.io/Offlinepages/';
-const linkURL = (zip) => LINK_BASE + '#p=' + b64uenc(zip);
+const appNeed = (n) => n + 4 + 1 + 6 + NFC_TYPE.length;
 const linkNeed = (zip) => linkURL(zip).replace(/^https:\/\//, '').length + 4 + 1 + 6 + 1 + 1;
 
 let t;
@@ -151,7 +94,7 @@ $('ecl').onchange = refresh;
 $('btnQR').onclick = async () => {
   await refresh();
   if (!current.zip) return;
-  const text = QR_PREFIX + b45enc(current.zip);
+  const text = qrText(current.zip);
   try {
     const qr = qrcode(0, $('ecl').value);
     qr.addData(text, 'Alphanumeric');
@@ -209,7 +152,7 @@ async function writeTag(records, label) {
     msg.innerHTML = `<span class="pill bad">✗</span> ${e.name}: ${e.message}`;
   }
 }
-$('btnWriteApp').onclick = () => writeTag(() => [{ recordType: 'mime', mediaType: NFC_MIME, data: current.zip }], 'app data');
+$('btnWriteApp').onclick = () => writeTag(() => [{ recordType: NFC_TYPE, data: current.zip }], 'app data');
 $('btnWriteLink').onclick = () => writeTag(() => [{ recordType: 'url', data: linkURL(current.zip) }], 'link');
 
 /* ---------- NFC read ---------- */
@@ -224,14 +167,14 @@ $('btnNfcScan').onclick = async () => {
     ndef.onreading = async ({ message, serialNumber }) => {
       for (const r of message.records) {
         try {
-          if (r.recordType === 'mime' && r.mediaType === NFC_MIME) {
+          if (r.recordType === NFC_TYPE || (r.recordType === 'mime' && r.mediaType === NFC_MIME_V1)) {
             const bytes = new Uint8Array(r.data.buffer, r.data.byteOffset, r.data.byteLength);
             return openPage(await inflate(bytes), `NFC tag · ${bytes.length} B`);
           }
           if (r.recordType === 'url') {
             const url = new TextDecoder().decode(r.data);
-            const m = url.match(/#p=([\w-]+)/);
-            if (m) { const b = b64udec(m[1]); return openPage(await inflate(b), `NFC link · ${b.length} B`); }
+            const b = fromLink(url);
+            if (b) return openPage(await inflate(b), `NFC link · ${b.length} B`);
           }
         } catch (e) { $('nfcMsg').textContent = 'Tag data damaged: ' + e.message; return; }
       }
@@ -247,9 +190,9 @@ const ctx = canvas.getContext('2d', { willReadFrequently: true });
 const log = (s) => ($('log').textContent = s);
 
 async function handleQR(text) {
-  if (!text || !text.startsWith(QR_PREFIX)) { log('Found a QR, but it isn’t a PocketPage.'); return false; }
   try {
-    const bytes = b45dec(text.slice(QR_PREFIX.length));
+    const bytes = fromQrText(text);
+    if (!bytes) { log('Found a QR, but it isn’t a PocketPage.'); return false; }
     const html = await inflate(bytes);
     stopCam();
     openPage(html, `QR · ${bytes.length} B`);
@@ -302,9 +245,8 @@ $('btnCamStop').onclick = () => { stopCam(); log('Stopped.'); };
 
 /* ---------- link-tag / URL entry point ---------- */
 async function fromHash() {
-  const m = location.hash.match(/^#p=([\w-]+)/);
-  if (!m) return;
-  try { const b = b64udec(m[1]); openPage(await inflate(b), `Link · ${b.length} B`, true); }
+  if (!/^#p2?=/.test(location.hash)) return;
+  try { const b = fromLink(location.hash); openPage(await inflate(b), `Link · ${b.length} B`, true); }
   catch (e) { alert('That link is damaged.'); }
 }
 window.addEventListener('hashchange', fromHash);

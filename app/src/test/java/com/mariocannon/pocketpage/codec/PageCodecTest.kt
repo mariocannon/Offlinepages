@@ -5,6 +5,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.ByteArrayOutputStream
+import java.util.zip.CRC32
+import java.util.zip.Deflater
 import kotlin.random.Random
 
 class PageCodecTest {
@@ -65,7 +68,7 @@ class PageCodecTest {
     fun pageRoundTripsThroughLink() {
         val html = "<!doctype html><h1>Kia ora</h1>" + "<p>Ōrewa beach</p>".repeat(30)
         val link = PageCodec.toLink(PageCodec.compress(html))
-        assertTrue(link.startsWith("https://mariocannon.github.io/Offlinepages/#p="))
+        assertTrue(link.startsWith("https://mariocannon.github.io/Offlinepages/#p2="))
         assertEquals(html, PageCodec.decompress(PageCodec.fromLink(link)!!))
     }
 
@@ -95,9 +98,61 @@ class PageCodecTest {
 
     @Test
     fun nfcSizing() {
-        // 100 B payload: 3 header + 16 type + 100 = 119 record, + 2 TLV + 1 terminator
-        assertEquals(122, PageCodec.nfcBytesNeeded(100))
-        // 421 B payload (tiny sample): 6 + 16 + 421 = 443, + 4 TLV + 1
-        assertEquals(448, PageCodec.nfcBytesNeeded(421))
+        // 100 B payload: 3 header + 4 type ("pp:2") + 100 = 107 record, + 2 TLV + 1 terminator
+        assertEquals(110, PageCodec.nfcBytesNeeded(100))
+        // 421 B payload: 6 + 4 + 421 = 431, + 4 TLV + 1
+        assertEquals(436, PageCodec.nfcBytesNeeded(421))
+    }
+
+    // ---- PP2: shared dictionary ----
+
+    /** Every PP2 code and tag depends on these exact bytes. Same numbers as tools/web-codec-test.mjs. */
+    @Test
+    fun dictionaryIsFrozen() {
+        assertEquals(3807, Pp2Dictionary.BYTES.size)
+        assertEquals(0xad40c250L, CRC32().apply { update(Pp2Dictionary.BYTES) }.value)
+    }
+
+    @Test
+    fun writesPp2() {
+        assertTrue(PageCodec.toQrText(PageCodec.compress("<h1>Kia ora</h1>")).startsWith("PP2:"))
+    }
+
+    @Test
+    fun dictionaryShrinksSmallPages() {
+        val html = "<meta charset=utf-8><meta name=viewport content=width=device-width>" +
+            "<h1>Kia ora Ōrewa</h1><p>Hibiscus Coast</p>"
+        val plain = Deflater(Deflater.BEST_COMPRESSION, true).run {
+            setInput(html.toByteArray(Charsets.UTF_8))
+            finish()
+            val out = ByteArrayOutputStream()
+            val buf = ByteArray(4096)
+            while (!finished()) out.write(buf, 0, deflate(buf))
+            end()
+            out.toByteArray()
+        }
+        val payload = PageCodec.compress(html)
+        assertTrue("PP2 ${payload.size} B vs PP1 ${plain.size} B", payload.size * 2 < plain.size)
+        assertEquals(html, PageCodec.decompress(payload))
+        // A PP1 payload (no dictionary) reads through the same decoder.
+        assertEquals(html, PageCodec.decompress(plain))
+    }
+
+    @Test
+    fun readsPp2QrMadeByTheWebApp() {
+        val fromWeb = "PP2:-TOCLBZIVO 6:8IKR29:I3J8WLNJ2Q0\$Q8D9ZUEUBG4N6-\$O7D0KD400"
+        assertEquals(
+            "<body class=pp-book><h1>Kia ora Ōrewa</h1><p>Made by the web app</p>",
+            PageCodec.decompress(PageCodec.fromQrText(fromWeb)!!),
+        )
+    }
+
+    @Test
+    fun readsPp2LinkMadeByTheWebApp() {
+        val fromWeb = "https://mariocannon.github.io/Offlinepages/#p2=wxpawPiENeKP9hSllidCornAzg3Uq0oEN6xBiQMA"
+        assertEquals(
+            "<body class=pp-book><h1>Kia ora Ōrewa</h1><p>From a link</p>",
+            PageCodec.decompress(PageCodec.fromLink(fromWeb)!!),
+        )
     }
 }

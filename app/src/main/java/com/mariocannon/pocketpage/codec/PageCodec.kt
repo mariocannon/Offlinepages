@@ -10,17 +10,28 @@ import java.util.zip.Inflater
  * The PocketPage data format. Pure Kotlin (no Android imports) so it's unit-tested.
  * Same format as the PocketPage web app, so codes and tags work in both.
  *
- *   payload = raw DEFLATE of the page's UTF-8 HTML
- *   QR      = "PP1:" + base45(payload)      -> QR alphanumeric mode
- *   NFC     = MIME record "application/x-pp", bytes = payload
+ *   payload = raw DEFLATE of the page's UTF-8 HTML, compressed against [Pp2Dictionary]
+ *   QR      = "PP2:" + base45(payload)      -> QR alphanumeric mode
+ *   NFC     = external-type record "pp:2", bytes = payload
+ *
+ * PP1 (the first format: no dictionary, "PP1:", MIME "application/x-pp", link "#p=") still opens.
+ * [decompress] reads both: it always loads the dictionary, and a PP1 stream never points into it.
  */
 object PageCodec {
-    const val QR_PREFIX = "PP1:"
-    const val MIME = "application/x-pp"
+    const val QR_PREFIX = "PP2:"
+    private const val QR_PREFIX_V1 = "PP1:"
+
+    /** NFC external type "pp:2" (4 bytes on the tag; the PP1 MIME type took 16). */
+    const val NFC_DOMAIN = "pp"
+    const val NFC_EXT = "2"
+    const val NFC_TYPE = "$NFC_DOMAIN:$NFC_EXT"
+    /** PP1 tags. Still read, no longer written. */
+    const val MIME_V1 = "application/x-pp"
     private const val MAX_HTML = 2 * 1024 * 1024 // zip-bomb guard
 
     fun compress(html: String): ByteArray {
         val d = Deflater(Deflater.BEST_COMPRESSION, true)
+        d.setDictionary(Pp2Dictionary.BYTES)
         d.setInput(html.toByteArray(Charsets.UTF_8))
         d.finish()
         val out = ByteArrayOutputStream()
@@ -32,6 +43,7 @@ object PageCodec {
 
     fun decompress(payload: ByteArray): String {
         val inf = Inflater(true)
+        inf.setDictionary(Pp2Dictionary.BYTES) // raw streams take it up front; harmless for PP1
         inf.setInput(payload + byteArrayOf(0)) // nowrap mode wants a trailing dummy byte
         val out = ByteArrayOutputStream()
         val buf = ByteArray(8192)
@@ -54,22 +66,24 @@ object PageCodec {
     fun toQrText(payload: ByteArray): String = QR_PREFIX + Base45.encode(payload)
 
     /** Returns the payload, or null if the text isn't a PocketPage QR. Throws if it's damaged. */
-    fun fromQrText(text: String): ByteArray? =
-        if (text.startsWith(QR_PREFIX)) Base45.decode(text.substring(QR_PREFIX.length)) else null
+    fun fromQrText(text: String): ByteArray? {
+        val prefix = listOf(QR_PREFIX, QR_PREFIX_V1).firstOrNull { text.startsWith(it) } ?: return null
+        return Base45.decode(text.substring(prefix.length))
+    }
 
     // ---- Link (opens on any phone, no app needed) ----
     /** Hosted viewer (GitHub Pages). Everything after # stays on the phone; servers never see it. */
     const val LINK_BASE = "https://mariocannon.github.io/Offlinepages/"
-    private const val LINK_KEY = "#p="
+    private const val LINK_KEY = "#p2="
+    private const val LINK_KEY_V1 = "#p="
 
     fun toLink(payload: ByteArray): String =
         LINK_BASE + LINK_KEY + Base64.getUrlEncoder().withoutPadding().encodeToString(payload)
 
     /** Returns the payload, or null if the URL isn't a PocketPage link. Throws if it's damaged. */
     fun fromLink(url: String): ByteArray? {
-        val i = url.indexOf(LINK_KEY)
-        if (i < 0) return null
-        val data = url.substring(i + LINK_KEY.length).takeWhile { it.isLetterOrDigit() || it == '-' || it == '_' }
+        val key = listOf(LINK_KEY, LINK_KEY_V1).firstOrNull { it in url } ?: return null
+        val data = url.substring(url.indexOf(key) + key.length).takeWhile { it.isLetterOrDigit() || it == '-' || it == '_' }
         if (data.isEmpty()) return null
         return Base64.getUrlDecoder().decode(data)
     }
@@ -83,10 +97,10 @@ object PageCodec {
     }
 
     // ---- NFC sizing ----
-    /** Bytes a tag needs for this payload: MIME record + NDEF TLV wrapper + terminator. */
+    /** Bytes a tag needs for this payload: "pp:2" record + NDEF TLV wrapper + terminator. */
     fun nfcBytesNeeded(payloadSize: Int): Int {
         val header = if (payloadSize < 256) 3 else 6
-        val record = header + MIME.length + payloadSize
+        val record = header + NFC_TYPE.length + payloadSize
         val tlv = if (record < 255) 2 else 4
         return record + tlv + 1
     }

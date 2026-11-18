@@ -14,7 +14,8 @@ import com.mariocannon.pocketpage.codec.PageCodec
 object TagIo {
 
     /** App-only tag: raw page, most capacity, needs PocketPage installed. */
-    fun message(payload: ByteArray) = NdefMessage(NdefRecord.createMime(PageCodec.MIME, payload))
+    fun message(payload: ByteArray) =
+        NdefMessage(NdefRecord.createExternal(PageCodec.NFC_DOMAIN, PageCodec.NFC_EXT, payload))
 
     /** Link tag: any phone opens it in the browser; opens in PocketPage if installed. */
     fun linkMessage(payload: ByteArray) = NdefMessage(NdefRecord.createUri(PageCodec.toLink(payload)))
@@ -22,9 +23,10 @@ object TagIo {
     /** Finds a PocketPage in either form (app record or link). */
     fun findPayload(messages: List<NdefMessage>): ByteArray? {
         for (m in messages) for (r in m.records) {
-            if (r.tnf == NdefRecord.TNF_MIME_MEDIA && String(r.type, Charsets.US_ASCII) == PageCodec.MIME) {
-                return r.payload
-            }
+            val type = String(r.type, Charsets.US_ASCII)
+            if (r.tnf == NdefRecord.TNF_EXTERNAL_TYPE && type == PageCodec.NFC_TYPE) return r.payload
+            // PP1 tags
+            if (r.tnf == NdefRecord.TNF_MIME_MEDIA && type == PageCodec.MIME_V1) return r.payload
             val uri = r.toUri() ?: continue
             PageCodec.fromLink(uri.toString())?.let { return it }
         }

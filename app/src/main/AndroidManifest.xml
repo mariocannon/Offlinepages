@@ -32,6 +32,15 @@
             <intent-filter>
                 <action android:name="android.nfc.action.NDEF_DISCOVERED" />
                 <category android:name="android.intent.category.DEFAULT" />
+                <data
+                    android:host="ext"
+                    android:pathPrefix="/pp:2"
+                    android:scheme="vnd.android.nfc" />
+            </intent-filter>
+            <!-- PP1 tags (older format). -->
+            <intent-filter>
+                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/x-pp" />
             </intent-filter>
             <!-- Link tags: tapped with the app closed -> open here, offline. -->
