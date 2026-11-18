@@ -2,7 +2,7 @@ package com.mariocannon.pocketpage.library
 
 import com.mariocannon.pocketpage.codec.BookMeta
 import com.mariocannon.pocketpage.codec.PageCodec
-import com.mariocannon.pocketpage.codec.pageTitle
+import com.mariocannon.pocketpage.codec.displayTitle
 import java.io.File
 import java.security.MessageDigest
 
@@ -93,7 +93,7 @@ class Library(private val dir: File) {
     private fun entry(f: File): Entry {
         val html = PageCodec.decompress(f.readBytes())
         val meta = BookMeta.read(html)
-        val title = pageTitle(html) ?: meta?.let { "Page ${it.page}" } ?: "Untitled page"
+        val title = displayTitle(html) ?: meta?.let { "Page ${it.page}" } ?: "Untitled page"
         return Entry(f.nameWithoutExtension, title, meta, f.lastModified())
     }
 

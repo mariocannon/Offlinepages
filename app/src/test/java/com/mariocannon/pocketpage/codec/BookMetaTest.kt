@@ -65,4 +65,21 @@ class BookMetaTest {
         assertEquals("Fish & Chips", pageTitle("<title>\n Fish &amp;  Chips </title>"))
         assertNull(pageTitle("<h1>No title</h1>"))
     }
+
+    @Test
+    fun displayTitlePrefersTitleThenHeadingThenText() {
+        assertEquals("Stop 3", displayTitle(page))
+        // No <title>: the first h1, with tags and entities cleaned up.
+        assertEquals("Lost dog: Bella", displayTitle("<meta charset=utf-8><h2>Intro</h2><h1>Lost dog: <b>Bella</b></h1>"))
+        assertEquals("Fish & Chips", displayTitle("<style>h1{color:red}</style><h1>\n Fish &amp; Chips </h1>"))
+        // No h1: the first h2.
+        assertEquals("Opening hours", displayTitle("<p>hi<h3>Small</h3><h2>Opening hours</h2>"))
+        // No headings: the start of the text, skipping styles and scripts.
+        assertEquals(
+            "Every Friday from 5pm to 9pm in the Silverdale Centre car…",
+            displayTitle("<style>p{x:y}</style><script>var a=1</script><p>Every Friday from 5pm to 9pm in the Silverdale Centre car park."),
+        )
+        assertEquals("Short note", displayTitle("<!-- hidden --><p>Short note"))
+        assertNull(displayTitle("<style>p{}</style><br>"))
+    }
 }

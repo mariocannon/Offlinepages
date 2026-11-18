@@ -54,6 +54,36 @@ private val TITLE = Regex("""<title\b[^>]*>(.*?)</title>""", setOf(RegexOption.I
 fun pageTitle(html: String): String? =
     TITLE.find(html)?.groupValues?.get(1)?.let { unescape(it).replace(Regex("\\s+"), " ").trim() }?.ifEmpty { null }
 
+private val HEADING = Regex("""<h([1-3])\b[^>]*>(.*?)</h\1\s*>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+private val HIDDEN = Regex("""<!--.*?-->|<(style|script|title|head)\b[^>]*>.*?</\1\s*>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+private val TAG_RE = Regex("""<[^>]*>""")
+private val SPACES = Regex("""\s+""")
+
+/**
+ * A name for the page in the library: its <title>, else its first heading (h1, then h2, h3),
+ * else the start of its text. Null for a page with no text at all. Small pages often skip
+ * <title> to save bytes, so the heading is usually what this finds.
+ */
+fun displayTitle(html: String, maxLength: Int = 60): String? {
+    pageTitle(html)?.let { return it }
+    val headings = HEADING.findAll(html).toList()
+    for (level in 1..3) {
+        val h = headings.firstOrNull { it.groupValues[1] == level.toString() } ?: continue
+        plainText(h.groupValues[2])?.let { return shorten(it, maxLength) }
+    }
+    return plainText(HIDDEN.replace(html, " "))?.let { shorten(it, maxLength) }
+}
+
+private fun plainText(html: String): String? =
+    unescape(TAG_RE.replace(html, " ")).replace("&nbsp;", " ").replace(SPACES, " ").trim().ifEmpty { null }
+
+/** Cuts at a word break and adds "…" when the text is longer than [max]. */
+private fun shorten(text: String, max: Int): String {
+    if (text.length <= max) return text
+    val cut = text.lastIndexOf(' ', max - 1).takeIf { it > max / 2 } ?: (max - 1)
+    return text.substring(0, cut).trimEnd() + "…"
+}
+
 private fun escape(s: String) =
     s.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")
 
